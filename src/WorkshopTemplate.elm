@@ -48,6 +48,16 @@ import Triangle3d
 import LineSegment3d
 import WebGL.Texture
 import Skybox
+import Random
+
+--custom type for material 
+type Mat = Metal | NonMetal | Matte 
+
+--custom type for axis
+type Axis = X | Y | Z 
+
+--clean up type for (x,y,z)
+type alias Dimension = (Float,Float,Float)
 
 type WorldCoordinates
     = WorldCoordinates
@@ -82,6 +92,115 @@ textureListSkyBox : List String
 textureListSkyBox = 
   [textureBottom, textureTop, textureSide1, textureSide2, textureSide3
     , textureSide4]
+
+-- Snowflakes are just small spheres
+snowflake : Entity WorldCoordinates
+snowflake = 
+    sphere (Matte, Color.white) 0.5
+
+snowflakes : Entity WorldCoordinates
+snowflakes = 
+    let
+        sfColumn = List.map2
+            ( \ x z -> snowflake |> move (x*40,0,100*sin (z*2) + 200))
+            (List.map toFloat <| List.range (-5) 5)
+            (List.map toFloat <| List.range (-5) 5)
+        sfList = List.map2
+            ( \ y z -> Scene3d.group sfColumn |> move (0,y*40,100*sin (z*2)))
+            (List.map toFloat <| List.range (-5) 5)
+            (List.map toFloat <| List.range (-5) 5)
+    in
+        Scene3d.group sfList
+
+--Drawing basic shapes 
+--non-metal material
+myMat : Mat -> Color.Color -> Material.Uniform WorldCoordinates
+myMat m colour = 
+    case m of 
+        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        Matte -> Material.matte colour 
+
+--textured non-metal material (some shapes require textured material? )
+myTexturedMat : Mat -> Color.Color -> Material.Textured WorldCoordinates
+myTexturedMat m colour = 
+    case m of 
+        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        Matte -> Material.matte colour 
+
+cube : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
+cube (m, colour) size = Scene3d.blockWithShadow (myMat m colour) <|
+        Block3d.from
+            (Point3d.centimeters 0 0 0)
+            (Point3d.centimeters size size size)
+
+prism : (Mat, Color.Color) -> Dimension -> Scene3d.Entity WorldCoordinates 
+prism (m, colour) (x,y,z) = 
+        Scene3d.blockWithShadow (myMat m colour) <|
+                Block3d.with
+                    { x1 = Length.centimeters 0
+                    , x2 = Length.centimeters x
+                    , y1 = Length.centimeters 0
+                    , y2 = Length.centimeters y
+                    , z1 = Length.centimeters 0
+                    , z2 = Length.centimeters z
+                    } 
+
+sphere : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
+sphere (m, colour) r = 
+        (Scene3d.sphereWithShadow (myTexturedMat m colour) <|
+            Sphere3d.withRadius (Length.centimeters r) Point3d.origin)
+            |> move (0,0,r)
+
+cone : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
+cone (m, colour) axis (b,t,r) = 
+        let 
+            along = 
+                case axis of 
+                    X -> Axis3d.x 
+                    Y -> Axis3d.y 
+                    Z -> Axis3d.z     
+
+        in 
+            Scene3d.coneWithShadow (myMat m colour) <|
+                Cone3d.along along
+                    { base = Length.centimeters b
+                    , tip = Length.centimeters t
+                    , radius = Length.centimeters r
+                    }
+
+cylinder : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
+cylinder (m, colour) axis (s,e,r) =
+        let 
+            along = 
+                case axis of 
+                    X -> Axis3d.x 
+                    Y -> Axis3d.y 
+                    _ -> Axis3d.z    
+
+        in 
+            Scene3d.cylinderWithShadow (myMat m colour) <|
+                Cylinder3d.along along
+                    { start = Length.centimeters s
+                    , end = Length.centimeters e 
+                    , radius = Length.centimeters r
+                    }
+
+--Translation 
+move : Dimension -> Entity coordinates -> Entity coordinates
+move (x,y,z) entity = entity |> Scene3d.translateBy (Vector3d.centimeters x y z)      
+
+rotate : Float -> Float -> Float -> Entity coordinates -> Entity coordinates 
+rotate pitch yaw roll entity = 
+    entity 
+        |> Scene3d.rotateAround Axis3d.x (Angle.radians pitch)  
+        |> Scene3d.rotateAround Axis3d.y (Angle.radians roll)  
+        |> Scene3d.rotateAround Axis3d.z (Angle.radians yaw)
+
+--TODO: Track eneity's position. 
+scale : Float -> Entity coordinates -> Entity coordinates 
+scale factor entity = entity |> Scene3d.scaleAbout (Point3d.centimeters 0 0 0) factor
 
 type alias Model =
     { width : Quantity Int Pixels
@@ -266,8 +385,8 @@ view model =
         ( firstLight, firstLightBall ) =
             pointLight
                 { position = Point3d.centimeters 0 0 100
-                , chromaticity = Light.fluorescent
-                , intensity = LuminousFlux.lumens 1000
+                , chromaticity = Light.sunlight
+                , intensity = LuminousFlux.lumens 10000
                 }
     
 
@@ -276,7 +395,7 @@ view model =
             Light.directional (Light.castsShadows True)
                 { direction = Direction3d.xyZ (Angle.degrees -90) (Angle.degrees -45)
                 , chromaticity = Light.sunlight
-                , intensity = Illuminance.lux 100
+                , intensity = Illuminance.lux 100 
                 }
 
         -- Add some soft lighting to fill in shadowed areas
@@ -320,6 +439,8 @@ view model =
         -- Consider this the equivalent of "myShapes" on macoutreach.rocks
         myEntities =  
             [ plane
+            , snowflakes
+              |> move (10*sin model.time, 0, -(repeatDuration 15 15 0 model.time))
             , firstLightBall
             , Skybox.skybox texturesList 1000
             ]
@@ -371,3 +492,9 @@ fetchTextures =
                 Ok texture -> LoadTexture texture
                 Err error -> Error error
         )
+
+-- repeat an animation for a given duration
+-- From macoutreach.rocks
+repeatDuration : Float -> Int -> Float -> Float -> Float
+repeatDuration speed duration startPosition time =
+  speed * (time - toFloat duration * toFloat (floor time // duration)) + startPosition

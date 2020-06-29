@@ -318,15 +318,12 @@ cylinder (m, colour) axis (s,e,r) =
 move : Dimension -> Entity coordinates -> Entity coordinates
 move (x,y,z) entity = entity |> Scene3d.translateBy (Vector3d.centimeters x y z)      
 
-rotate : (Axis, Float) -> Entity coordinates -> Entity coordinates 
-rotate (axis, angle) entity = 
-    let 
-        along = case axis of 
-            X -> Axis3d.x 
-            Y -> Axis3d.y 
-            Z -> Axis3d.z 
-    in 
-        entity |> Scene3d.rotateAround along (Angle.degrees angle)  
+rotate : Float -> Float -> Float -> Entity coordinates -> Entity coordinates 
+rotate pitch yaw roll entity = 
+    entity 
+        |> Scene3d.rotateAround Axis3d.x (Angle.radians pitch)  
+        |> Scene3d.rotateAround Axis3d.y (Angle.radians roll)  
+        |> Scene3d.rotateAround Axis3d.z (Angle.radians yaw)
 
 --TODO: Track eneity's position. 
 scale : Float -> Entity coordinates -> Entity coordinates 
@@ -347,8 +344,7 @@ myBasicShapes t = Scene3d.group [
                 |> move (0,0,abs <| 50* sin (3*t))
         --Cone
             , cone (Metal, Color.grey) Z (0,40,10)
-                |> rotate (X,90)
-                |> rotate (Z, 100 * t)
+                |> rotate (degrees 90) (degrees (100*t)) 0
                 |> move (-60,60,10)
 
         --Cylinder 
