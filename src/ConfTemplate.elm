@@ -46,8 +46,6 @@ import TriangularMesh
 import Cylinder3d
 import Triangle3d
 import LineSegment3d
-import WebGL.Texture
-import Skybox
 
 --custom type for material 
 type Mat = Metal | NonMetal | Matte 
@@ -239,7 +237,7 @@ debugs =
         (LineSegment3d.along Axis3d.z (Length.centimeters 0) (Length.centimeters 5000))
     ]
 
---Drawing basic shapes 
+--Custom wrapper functions (for purpose of shortening our code for kids)
 --non-metal material
 myMat : Mat -> Color.Color -> Material.Uniform WorldCoordinates
 myMat m colour = 
@@ -256,12 +254,6 @@ myTexturedMat m colour =
         NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
         Matte -> Material.matte colour 
 
-cube : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
-cube (m, colour) size = Scene3d.blockWithShadow (myMat m colour) <|
-        Block3d.from
-            (Point3d.centimeters 0 0 0)
-            (Point3d.centimeters size size size)
-
 prism : (Mat, Color.Color) -> Dimension -> Scene3d.Entity WorldCoordinates 
 prism (m, colour) (x,y,z) = 
         Scene3d.blockWithShadow (myMat m colour) <|
@@ -273,6 +265,13 @@ prism (m, colour) (x,y,z) =
                     , z1 = Length.centimeters 0
                     , z2 = Length.centimeters z
                     } 
+                    
+cube : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
+cube (m, colour) size = Scene3d.blockWithShadow (myMat m colour) <|
+        Block3d.from
+            (Point3d.centimeters 0 0 0)
+            (Point3d.centimeters size size size)
+
 
 sphere : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
 sphere (m, colour) r = 
@@ -334,13 +333,28 @@ scale factor entity = entity |> Scene3d.scaleAbout (Point3d.centimeters 0 0 0) f
 
 --TODO: Let's try drawing some basic shapes using the above codes & translate them 
 myBasicShapes t = Scene3d.group [
+        --how to draw prism, as defined in elm-3d-scene
+        Scene3d.blockWithShadow (Material.nonmetal { baseColor = Color.orange, roughness = 0.2 }) <|
+                Block3d.with
+                    { x1 = Length.centimeters 0
+                    , x2 = Length.centimeters 10
+                    , y1 = Length.centimeters 0
+                    , y2 = Length.centimeters 10
+                    , z1 = Length.centimeters 0
+                    , z2 = Length.centimeters 20
+                    } 
+            ,
+            
+        --shapes with custom wrapper functions 
+        --Prism 
+              prism (Metal, Color.orange) (10,10,20)
+                |> move (50 * sin (2*t), 50 * cos (2*t), 0)
+
         --Cube 
-              cube (NonMetal, Color.red) 15
+            ,  cube (NonMetal, Color.red) 15
                 |> scale (abs <| 2 * sin t)
                 |> move (0, 20, 0)
-        --Prism 
-            , prism (Metal, Color.orange) (10,10,20)
-                |> move (50 * sin (2*t), 50 * cos (2*t), 0)
+
         --Sphere 
             , sphere (Matte, Color.lightBlue) 10 
                 |> move (70,70,0)
@@ -369,7 +383,7 @@ view model =
         ( firstLight, firstLightBall ) =
             pointLight
                 { position = Point3d.centimeters 0 0 100
-                , chromaticity = Light.fluorescent
+                , chromaticity = Light.incandescent
                 , intensity = LuminousFlux.lumens 1000
                 }
     
@@ -432,7 +446,7 @@ view model =
         , antialiasing = Scene3d.multisampling
         , dimensions = ( model.width, model.height )
         , background = Scene3d.backgroundColor Color.lightBlue
-        , entities = myEntities
+        , entities = myEntities --myshapes
         }
 
 mouseMoveDecoder : Decoder Msg
@@ -440,3 +454,4 @@ mouseMoveDecoder =
     Decode.map2 MouseMove
         (Decode.field "movementX" (Decode.map Pixels.pixels Decode.float))
         (Decode.field "movementY" (Decode.map Pixels.pixels Decode.float))
+
