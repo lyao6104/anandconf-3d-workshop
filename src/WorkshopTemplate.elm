@@ -1,4 +1,6 @@
-{- This file should provide a good starting point the snowman. Modified from "3d-elm-camp/BeeMovement.elm".
+{- COMPILED BUT NOT SHOWN -}
+
+{- This file should provide a good starting point for the snowman. Modified from "3d-elm-camp/BeeMovement.elm".
  -}
 
 module WorkshopTemplate exposing (main)
@@ -48,179 +50,35 @@ import Triangle3d
 import LineSegment3d
 import WebGL.Texture
 import Skybox
-import Random
 
---custom type for material 
-type Mat = Metal | NonMetal | Matte 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ -- Listen for resize events so we can render full screen
+          Browser.Events.onResize
+            (\width height ->
+                Resize
+                    (Pixels.pixels width)
+                    (Pixels.pixels height)
+            )
 
---custom type for axis
-type Axis = X | Y | Z 
+        -- Subscribe to animation frames to animate the cubes
+        , Browser.Events.onAnimationFrameDelta (Duration.seconds >> Tick)
 
---clean up type for (x,y,z)
-type alias Dimension = (Float,Float,Float)
+        -- Listen for visibility change events so we can stop orbiting if the
+        -- user switches to a different tab etc.
+        , Browser.Events.onVisibilityChange VisibilityChange
 
-type WorldCoordinates
-    = WorldCoordinates
+        -- Listen for orbit-related mouse events
+        , if model.orbiting then
+            Sub.batch
+                [ Browser.Events.onMouseMove mouseMoveDecoder
+                , Browser.Events.onMouseUp (Decode.succeed MouseUp)
+                ]
 
-{- Here you can specify what images to use to create the skybox -}
-
-textureBottom : String
-textureBottom =
-    "todo"
-
-textureTop : String
-textureTop =
-    "todo"
-
-textureSide1 : String
-textureSide1 =
-    "todo"
-
-textureSide2 : String
-textureSide2 =
-    "todo"
-
-textureSide3 : String
-textureSide3 =
-    "todo"
-
-textureSide4 : String
-textureSide4 =
-    "todo"
-
-textureListSkyBox : List String
-textureListSkyBox = 
-  [textureBottom, textureTop, textureSide1, textureSide2, textureSide3
-    , textureSide4]
-
--- Snowflakes are just small spheres
-snowflake : Entity WorldCoordinates
-snowflake = 
-    sphere (Matte, Color.white) 0.5
-
-snowflakes : Entity WorldCoordinates
-snowflakes = 
-    let
-        sfColumn = List.map2
-            ( \ x z -> snowflake |> move (x*40,0,100*sin (z*2) + 200))
-            (List.map toFloat <| List.range (-5) 5)
-            (List.map toFloat <| List.range (-5) 5)
-        sfList = List.map2
-            ( \ y z -> Scene3d.group sfColumn |> move (0,y*40,100*sin (z*2)))
-            (List.map toFloat <| List.range (-5) 5)
-            (List.map toFloat <| List.range (-5) 5)
-    in
-        Scene3d.group sfList
-
---Drawing basic shapes 
---non-metal material
-myMat : Mat -> Color.Color -> Material.Uniform WorldCoordinates
-myMat m colour = 
-    case m of 
-        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
-        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
-        Matte -> Material.matte colour 
-
---textured non-metal material (some shapes require textured material? )
-myTexturedMat : Mat -> Color.Color -> Material.Textured WorldCoordinates
-myTexturedMat m colour = 
-    case m of 
-        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
-        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
-        Matte -> Material.matte colour 
-
-cube : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
-cube (m, colour) size = Scene3d.blockWithShadow (myMat m colour) <|
-        Block3d.from
-            (Point3d.centimeters 0 0 0)
-            (Point3d.centimeters size size size)
-
-prism : (Mat, Color.Color) -> Dimension -> Scene3d.Entity WorldCoordinates 
-prism (m, colour) (x,y,z) = 
-        Scene3d.blockWithShadow (myMat m colour) <|
-                Block3d.with
-                    { x1 = Length.centimeters 0
-                    , x2 = Length.centimeters x
-                    , y1 = Length.centimeters 0
-                    , y2 = Length.centimeters y
-                    , z1 = Length.centimeters 0
-                    , z2 = Length.centimeters z
-                    } 
-
-sphere : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
-sphere (m, colour) r = 
-        (Scene3d.sphereWithShadow (myTexturedMat m colour) <|
-            Sphere3d.withRadius (Length.centimeters r) Point3d.origin)
-            |> move (0,0,r)
-
-cone : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
-cone (m, colour) axis (b,t,r) = 
-        let 
-            along = 
-                case axis of 
-                    X -> Axis3d.x 
-                    Y -> Axis3d.y 
-                    Z -> Axis3d.z     
-
-        in 
-            Scene3d.coneWithShadow (myMat m colour) <|
-                Cone3d.along along
-                    { base = Length.centimeters b
-                    , tip = Length.centimeters t
-                    , radius = Length.centimeters r
-                    }
-
-cylinder : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
-cylinder (m, colour) axis (s,e,r) =
-        let 
-            along = 
-                case axis of 
-                    X -> Axis3d.x 
-                    Y -> Axis3d.y 
-                    _ -> Axis3d.z    
-
-        in 
-            Scene3d.cylinderWithShadow (myMat m colour) <|
-                Cylinder3d.along along
-                    { start = Length.centimeters s
-                    , end = Length.centimeters e 
-                    , radius = Length.centimeters r
-                    }
-
---Translation 
-move : Dimension -> Entity coordinates -> Entity coordinates
-move (x,y,z) entity = entity |> Scene3d.translateBy (Vector3d.centimeters x y z)      
-
-rotate : Float -> Float -> Float -> Entity coordinates -> Entity coordinates 
-rotate pitch yaw roll entity = 
-    entity 
-        |> Scene3d.rotateAround Axis3d.x (Angle.radians pitch)  
-        |> Scene3d.rotateAround Axis3d.y (Angle.radians roll)  
-        |> Scene3d.rotateAround Axis3d.z (Angle.radians yaw)
-
---TODO: Track eneity's position. 
-scale : Float -> Entity coordinates -> Entity coordinates 
-scale factor entity = entity |> Scene3d.scaleAbout (Point3d.centimeters 0 0 0) factor
-
-type alias Model =
-    { width : Quantity Int Pixels
-    , height : Quantity Int Pixels
-    , time : Float
-    , orbiting : Bool
-    , azimuth : Angle
-    , elevation : Angle
-    , textures : Maybe (List (Material.Texture Color))
-    }
-
-type Msg
-    = Resize (Quantity Int Pixels) (Quantity Int Pixels)
-    | Tick Duration
-    | MouseDown
-    | MouseMove (Quantity Float Pixels) (Quantity Float Pixels)
-    | MouseUp
-    | VisibilityChange Browser.Events.Visibility
-    | LoadTexture (List (Material.Texture Color))
-    | Error WebGL.Texture.Error
+          else
+            Browser.Events.onMouseDown (Decode.succeed MouseDown)
+        ]
 
 main : Program () Model Msg
 main =
@@ -316,34 +174,148 @@ update message model =
         Error _ -> 
             ( model, Cmd.none)
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ -- Listen for resize events so we can render full screen
-          Browser.Events.onResize
-            (\width height ->
-                Resize
-                    (Pixels.pixels width)
-                    (Pixels.pixels height)
-            )
+mouseMoveDecoder : Decoder Msg
+mouseMoveDecoder =
+    Decode.map2 MouseMove
+        (Decode.field "movementX" (Decode.map Pixels.pixels Decode.float))
+        (Decode.field "movementY" (Decode.map Pixels.pixels Decode.float))
 
-        -- Subscribe to animation frames to animate the cubes
-        , Browser.Events.onAnimationFrameDelta (Duration.seconds >> Tick)
+-- Fetch textures from textureListSkybox
+-- Get a result type as List (Material.Texture Color)
+-- Decode the List when we actually are going to load the texture
+-- In this example, we decode the list in Skybox2.skybox
+fetchTextures : Cmd Msg 
+fetchTextures =
+  textureListSkyBox
+    |> List.map Material.load
+    -- Load the meterial, [Material.load texture, Material.load texture... ]
+    |> Task.sequence -- sequence : List (Task x a) -> Task x (List a)
+    -- Transform a list of the tast to a tast
+    -- Get the result type as Task WebGL.Texture.Error (List (Texture value))
+    |> Task.andThen -- andThen :
+    -- concatenate two tasks
+         (\textures -> 
+            case textures of
+              [] -> 
+                Task.fail WebGL.Texture.LoadError
+              textList ->
+                Task.succeed textList)
+              -- If the list is not empty let the tast succeed
+    |> Task.attempt -- Attempt to update the task here
+       (\result ->
+            case result of
+                Ok texture -> LoadTexture texture
+                Err error -> Error error
+        )
 
-        -- Listen for visibility change events so we can stop orbiting if the
-        -- user switches to a different tab etc.
-        , Browser.Events.onVisibilityChange VisibilityChange
+{- UNEDITABLE -}
 
-        -- Listen for orbit-related mouse events
-        , if model.orbiting then
-            Sub.batch
-                [ Browser.Events.onMouseMove mouseMoveDecoder
-                , Browser.Events.onMouseUp (Decode.succeed MouseUp)
-                ]
+--custom type for material 
+type Mat = Metal | NonMetal | Matte 
 
-          else
-            Browser.Events.onMouseDown (Decode.succeed MouseDown)
-        ]
+--custom type for axis
+type Axis = X | Y | Z 
+
+--clean up type for (x,y,z)
+type alias Dimension = (Float,Float,Float)
+
+type WorldCoordinates
+    = WorldCoordinates
+
+type alias Model =
+    { width : Quantity Int Pixels
+    , height : Quantity Int Pixels
+    , time : Float
+    , orbiting : Bool
+    , azimuth : Angle
+    , elevation : Angle
+    , textures : Maybe (List (Material.Texture Color))
+    }
+
+type Msg
+    = Resize (Quantity Int Pixels) (Quantity Int Pixels)
+    | Tick Duration
+    | MouseDown
+    | MouseMove (Quantity Float Pixels) (Quantity Float Pixels)
+    | MouseUp
+    | VisibilityChange Browser.Events.Visibility
+    | LoadTexture (List (Material.Texture Color))
+    | Error WebGL.Texture.Error
+
+--Drawing basic shapes 
+--non-metal material
+myMat : Mat -> Color.Color -> Material.Uniform WorldCoordinates
+myMat m colour = 
+    case m of 
+        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        Matte -> Material.matte colour 
+
+--textured non-metal material (some shapes require textured material? )
+myTexturedMat : Mat -> Color.Color -> Material.Textured WorldCoordinates
+myTexturedMat m colour = 
+    case m of 
+        Metal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        NonMetal -> Material.nonmetal { baseColor = colour, roughness = 0.2 }
+        Matte -> Material.matte colour 
+
+cube : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
+cube (m, colour) size = Scene3d.blockWithShadow (myMat m colour) <|
+        Block3d.from
+            (Point3d.centimeters 0 0 0)
+            (Point3d.centimeters size size size)
+
+prism : (Mat, Color.Color) -> Dimension -> Scene3d.Entity WorldCoordinates 
+prism (m, colour) (x,y,z) = 
+        Scene3d.blockWithShadow (myMat m colour) <|
+                Block3d.with
+                    { x1 = Length.centimeters 0
+                    , x2 = Length.centimeters x
+                    , y1 = Length.centimeters 0
+                    , y2 = Length.centimeters y
+                    , z1 = Length.centimeters 0
+                    , z2 = Length.centimeters z
+                    } 
+
+sphere : (Mat, Color.Color) -> Float -> Scene3d.Entity WorldCoordinates
+sphere (m, colour) r = 
+        (Scene3d.sphereWithShadow (myTexturedMat m colour) <|
+            Sphere3d.withRadius (Length.centimeters r) Point3d.origin)
+            |> move (0,0,r)
+
+cone : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
+cone (m, colour) axis (b,t,r) = 
+        let 
+            along = 
+                case axis of 
+                    X -> Axis3d.x 
+                    Y -> Axis3d.y 
+                    Z -> Axis3d.z     
+
+        in 
+            Scene3d.coneWithShadow (myMat m colour) <|
+                Cone3d.along along
+                    { base = Length.centimeters b
+                    , tip = Length.centimeters t
+                    , radius = Length.centimeters r
+                    }
+
+cylinder : (Mat, Color.Color) -> Axis -> Dimension -> Scene3d.Entity WorldCoordinates
+cylinder (m, colour) axis (s,e,r) =
+        let 
+            along = 
+                case axis of 
+                    X -> Axis3d.x 
+                    Y -> Axis3d.y 
+                    _ -> Axis3d.z    
+
+        in 
+            Scene3d.cylinderWithShadow (myMat m colour) <|
+                Cylinder3d.along along
+                    { start = Length.centimeters s
+                    , end = Length.centimeters e 
+                    , radius = Length.centimeters r
+                    }
 
 {-| Create both a Light and an Entity (a bright glowing sphere) representing a
 particular point light
@@ -377,6 +349,26 @@ pointLight properties =
     ( Light.point (Light.castsShadows True) properties
     , Scene3d.sphere sphereMaterial lightsphere
     )
+
+--Translation 
+move : Dimension -> Entity coordinates -> Entity coordinates
+move (x,y,z) entity = entity |> Scene3d.translateBy (Vector3d.centimeters x y z)      
+
+rotate : Float -> Float -> Float -> Entity coordinates -> Entity coordinates 
+rotate pitch yaw roll entity = 
+    entity 
+        |> Scene3d.rotateAround Axis3d.x (Angle.radians pitch)  
+        |> Scene3d.rotateAround Axis3d.y (Angle.radians roll)  
+        |> Scene3d.rotateAround Axis3d.z (Angle.radians yaw)
+
+--TODO: Track eneity's position. 
+scale : Float -> Entity coordinates -> Entity coordinates 
+scale factor entity = entity |> Scene3d.scaleAbout (Point3d.centimeters 0 0 0) factor
+
+-- repeat an animation for a given duration
+repeatDuration : Float -> Int -> Float -> Float -> Float
+repeatDuration speed duration startPosition time =
+  speed * (time - toFloat duration * toFloat (floor time // duration)) + startPosition
 
 view : Model -> Html Msg
 view model =
@@ -436,12 +428,9 @@ view model =
             Nothing ->
                 List.repeat 6 (Material.constant Color.lightBlue)
 
-        -- Consider this the equivalent of "myShapes" on macoutreach.rocks
-        myEntities =  
-            [ plane
-            , snowflakes
-              |> move (10*sin model.time, 0, -(repeatDuration 15 15 0 model.time))
-            , firstLightBall
+        baseEntities = 
+            [ firstLightBall
+            , plane
             , Skybox.skybox texturesList 1000
             ]
 
@@ -456,45 +445,63 @@ view model =
         , antialiasing = Scene3d.multisampling
         , dimensions = ( model.width, model.height )
         , background = Scene3d.backgroundColor Color.lightBlue
-        , entities = myEntities
+        , entities = baseEntities ++ myEntities model
         }
 
-mouseMoveDecoder : Decoder Msg
-mouseMoveDecoder =
-    Decode.map2 MouseMove
-        (Decode.field "movementX" (Decode.map Pixels.pixels Decode.float))
-        (Decode.field "movementY" (Decode.map Pixels.pixels Decode.float))
+{- EDITABLE -}
 
--- Fetch textures from textureListSkybox
--- Get a result type as List (Material.Texture Color)
--- Decode the List when we actually are going to load the texture
--- In this example, we decode the list in Skybox2.skybox
-fetchTextures : Cmd Msg 
-fetchTextures =
-  textureListSkyBox
-    |> List.map Material.load
-    -- Load the meterial, [Material.load texture, Material.load texture... ]
-    |> Task.sequence -- sequence : List (Task x a) -> Task x (List a)
-    -- Transform a list of the tast to a tast
-    -- Get the result type as Task WebGL.Texture.Error (List (Texture value))
-    |> Task.andThen -- andThen :
-    -- concatenate two tasks
-         (\textures -> 
-            case textures of
-              [] -> 
-                Task.fail WebGL.Texture.LoadError
-              textList ->
-                Task.succeed textList)
-              -- If the list is not empty let the tast succeed
-    |> Task.attempt -- Attempt to update the task here
-       (\result ->
-            case result of
-                Ok texture -> LoadTexture texture
-                Err error -> Error error
-        )
+-- Consider this the equivalent of "myShapes" on the other slots. You start out with some snowflakes
+myEntities model =  
+    [ snowflakes
+        |> move (10*sin model.time, 0, -(repeatDuration 15 15 0 model.time))
+    ]
 
--- repeat an animation for a given duration
--- From macoutreach.rocks
-repeatDuration : Float -> Int -> Float -> Float -> Float
-repeatDuration speed duration startPosition time =
-  speed * (time - toFloat duration * toFloat (floor time // duration)) + startPosition
+{- Here you can specify what images to use to create the skybox -}
+
+textureBottom : String
+textureBottom =
+    "todo"
+
+textureTop : String
+textureTop =
+    "todo"
+
+textureSide1 : String
+textureSide1 =
+    "todo"
+
+textureSide2 : String
+textureSide2 =
+    "todo"
+
+textureSide3 : String
+textureSide3 =
+    "todo"
+
+textureSide4 : String
+textureSide4 =
+    "todo"
+
+textureListSkyBox : List String
+textureListSkyBox = 
+  [textureBottom, textureTop, textureSide1, textureSide2, textureSide3
+    , textureSide4]
+
+-- Snowflakes are just small spheres; you can change these if you want
+snowflake : Entity WorldCoordinates
+snowflake = 
+    sphere (Matte, Color.white) 0.5
+
+snowflakes : Entity WorldCoordinates
+snowflakes = 
+    let
+        sfColumn = List.map2
+            ( \ x z -> snowflake |> move (x*40,0,100*sin (z*2) + 200))
+            (List.map toFloat <| List.range (-5) 5)
+            (List.map toFloat <| List.range (-5) 5)
+        sfList = List.map2
+            ( \ y z -> Scene3d.group sfColumn |> move (0,y*40,100*sin (z*2)))
+            (List.map toFloat <| List.range (-5) 5)
+            (List.map toFloat <| List.range (-5) 5)
+    in
+        Scene3d.group sfList
