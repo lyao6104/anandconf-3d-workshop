@@ -93,7 +93,7 @@ init () =
       , height = Quantity.zero
       , time = 0
       , orbiting = False
-      , azimuth = Angle.degrees -90
+      , azimuth = Angle.degrees 0
       , elevation = Angle.degrees 30
       }
     , Cmd.batch 

@@ -95,7 +95,7 @@ init () =
       , height = Quantity.zero
       , time = 0
       , orbiting = False
-      , azimuth = Angle.degrees -90
+      , azimuth = Angle.degrees 0
       , elevation = Angle.degrees 30
       , textures = Nothing 
       }
@@ -381,7 +381,7 @@ view model =
         -- Incandescent light bulb
         ( firstLight, firstLightBall ) =
             pointLight
-                { position = Point3d.centimeters 0 0 100
+                { position = Point3d.centimeters 50 50 150
                 , chromaticity = Light.sunlight
                 , intensity = LuminousFlux.lumens 10000
                 }
@@ -459,7 +459,10 @@ view model =
 myEntities model =  
     [ snowflakes
         |> move (10*sin model.time, 0, -(repeatDuration 15 15 0 model.time))
-    ]
+    , snowman 
+        |> rotate  (degrees 20 * sin (3*model.time)) (degrees -60 *  model.time) 0
+        |> move (50 * sin model.time, 50 * cos model.time, abs <| 20 * sin (3 * model.time))
+    ] ++ debugs 
 
 {- Here you can specify what images to use to create the skybox -}
 
@@ -505,3 +508,96 @@ snowflakes =
             (List.map toFloat <| List.range (-5) 5)
     in
         Scene3d.group sfList
+
+--snowman
+snowman : Entity WorldCoordinates
+snowman = 
+    let 
+        body size = sphere (Matte, Color.white) size 
+
+        dot size = sphere (Metal, Color.black) size 
+
+        nose = cone (Matte, Color.orange) X (0,10,2)
+
+        hat = Scene3d.group [ 
+                    --base
+                    cylinder (NonMetal, Color.black) Z (0,1,12)
+                    ,
+                    --top 
+                    cylinder (NonMetal, Color.black) Z (1,10,7)
+                ] 
+
+        scarf = cylinder (Matte, Color.red) Z (0, 4, 12)
+
+        hand = Scene3d.group [
+                    --arm
+                    cylinder (Matte, Color.darkBrown) Z (0,30,1)
+                    ,
+                    --fingers 
+                    cylinder (Matte, Color.darkBrown) Z (0,10,1)
+                        |> rotate (degrees 30) 0 0 
+                        |> move (0,0,20)
+                    ,
+                    cylinder (Matte, Color.darkBrown) Z (0,10,1)
+                        |> rotate (degrees -30) 0 0 
+                        |> move (0,0,20)
+
+                ] 
+
+    in
+        Scene3d.group [
+            -- lowest
+              body 20
+            -- middle
+            , body 15
+                |> move (0,0,25)
+            -- head 
+            , body 10 
+                |> move (0,0,50)
+
+            -- right eye
+            , dot 1
+                |> move  (7.5,-3,65)
+            -- left eye
+            , dot 1 
+                |> move (7.5,3,65)
+            , nose 
+                |> move (7.5,0,63)
+
+            --buttons
+            , dot 2 
+                |> move (13,0,45)
+            , dot 2 
+                |> move (15,0,35)
+            , dot 2 
+                |> move (19,0,25)
+            
+
+            --hat
+            , hat   
+                |> move (0,0,68)
+
+            -- scarf
+            , scarf 
+                |> move (0,0,50)
+
+            --right hand
+            , hand 
+                |> rotate (degrees 60) 0 0
+                |> move (0,-10,40)
+            --left hand 
+            , hand 
+                |> rotate (degrees -60) 0 0
+                |> move (0,10,40)
+        ] 
+
+
+--draw positive x,y,z axis 
+debugs : List (Entity WorldCoordinates)
+debugs =
+    [ Scene3d.lineSegment (Material.color Color.darkRed)
+        (LineSegment3d.along Axis3d.x (Length.centimeters 0) (Length.centimeters 5000))
+    , Scene3d.lineSegment (Material.color Color.yellow)
+        (LineSegment3d.along Axis3d.y (Length.centimeters 0) (Length.centimeters 5000))
+    , Scene3d.lineSegment (Material.color Color.darkBlue)
+        (LineSegment3d.along Axis3d.z (Length.centimeters 0) (Length.centimeters 5000)) ]
