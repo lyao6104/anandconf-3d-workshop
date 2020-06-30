@@ -370,6 +370,11 @@ repeatDuration : Float -> Int -> Float -> Float -> Float
 repeatDuration speed duration startPosition time =
   speed * (time - toFloat duration * toFloat (floor time // duration)) + startPosition
 
+textureListSkyBox : List String
+textureListSkyBox = 
+  [textureBottom, textureTop, textureSide1, textureSide2, textureSide3
+    , textureSide4]
+
 view : Model -> Html Msg
 view model =
     let
@@ -481,11 +486,6 @@ textureSide3 =
 textureSide4 : String
 textureSide4 =
     "todo"
-
-textureListSkyBox : List String
-textureListSkyBox = 
-  [textureBottom, textureTop, textureSide1, textureSide2, textureSide3
-    , textureSide4]
 
 -- Snowflakes are just small spheres; you can change these if you want
 snowflake : Entity WorldCoordinates
